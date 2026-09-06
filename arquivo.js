@@ -19,6 +19,7 @@ let sb = ONLINE
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 let currentUser = null;
+let editingBookId = null;
 const today = new Date().toISOString().slice(0, 10);
 
 document.getElementById("today").textContent = new Date().toLocaleDateString(
@@ -125,7 +126,6 @@ async function addBook() {
     titulo: bookTitle.value.trim(),
     autor: bookAuthor.value.trim(),
     codigo: bookCode.value.trim(),
-    ano: bookYear.value.trim(),
     ativo: true,
   };
   if (!b.titulo) {
@@ -133,7 +133,40 @@ async function addBook() {
     return;
   }
   db.livros.push(b);
-  [bookTitle, bookAuthor, bookCode, bookYear].forEach((x) => (x.value = ""));
+  [bookTitle, bookAuthor, bookCode].forEach((x) => (x.value = ""));
+  await save();
+}
+
+function editBook(id) {
+  const book = db.livros.find((item) => item.id === id);
+  if (!book) return;
+  editingBookId = id;
+  editBookName.value = book.titulo || "";
+  editBookAuthor.value = book.autor || "";
+  editBookCode.value = book.codigo || "";
+  editBookStatus.value = String(book.ativo !== false);
+  editBookModal.classList.remove("hidden");
+  editBookName.focus();
+}
+
+function closeEditBook() {
+  editingBookId = null;
+  editBookModal.classList.add("hidden");
+}
+
+async function saveEditBook() {
+  const book = db.livros.find((item) => item.id === editingBookId);
+  if (!book) return;
+  const titulo = editBookName.value.trim();
+  if (!titulo) {
+    alert("Informe o título.");
+    return;
+  }
+  book.titulo = titulo;
+  book.autor = editBookAuthor.value.trim();
+  book.codigo = editBookCode.value.trim();
+  book.ativo = editBookStatus.value === "true";
+  closeEditBook();
   await save();
 }
 
@@ -208,7 +241,6 @@ async function loadCloud() {
         titulo: b.titulo,
         autor: b.autor,
         codigo: b.codigo,
-        ano: b.ano,
         ativo: b.ativo,
       })),
       alunos: students.data.map((a) => ({
@@ -249,7 +281,6 @@ async function syncLocalToCloud() {
     titulo: x.titulo,
     autor: x.autor,
     codigo: x.codigo,
-    ano: x.ano,
     ativo: x.ativo,
   }));
   const a = db.alunos.map((x) => ({
@@ -321,7 +352,8 @@ function render() {
     .map(
       (b) => `<tr>
    <td>${esc(b.titulo)}</td><td>${esc(b.autor)}</td><td>${esc(b.codigo)}</td>
-   <td>${esc(b.ano)}</td><td>${b.ativo === false ? "Inativo" : "Ativo"}</td></tr>`,
+   <td><span class="status-badge ${b.ativo === false ? "status-inactive" : "status-active"}">${b.ativo === false ? "Inativo" : "Ativo"}</span></td>
+   <td><button type="button" onclick="editBook('${b.id}')">Editar</button></td></tr>`,
     )
     .join("");
 

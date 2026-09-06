@@ -98,6 +98,20 @@ select {
   border-radius: 12px;
   background: #dcfce7;
 }
+.status-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+.status-active {
+  color: #166534;
+  background: #dcfce7;
+}
+.status-inactive {
+  color: #991b1b;
+  background: #fee2e2;
+}
 .late {
   background: #fee2e2;
   color: #991b1b;
@@ -125,6 +139,34 @@ select {
 }
 .hidden {
   display: none;
+}
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgb(15 23 42 / 55%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 10;
+}
+.modal.hidden {
+  display: none;
+}
+.modalbox {
+  background: #fff;
+  border-radius: 10px;
+  padding: 22px;
+  width: min(520px, 100%);
+  box-shadow: 0 8px 30px rgb(15 23 42 / 25%);
+}
+.modalbox h2 {
+  margin-top: 0;
+}
+.modalactions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 @media print {
   header,

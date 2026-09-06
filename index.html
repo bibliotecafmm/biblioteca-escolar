@@ -50,9 +50,9 @@
 <h2>Cadastro de livros</h2>
 <div class="form"><div class="row">
 <input id="bookTitle" placeholder="Título"><input id="bookAuthor" placeholder="Autor">
-<input id="bookCode" placeholder="Código"><input id="bookYear" placeholder="Ano">
+<input id="bookCode" placeholder="Código">
 </div><button onclick="addBook()">Cadastrar livro</button></div>
-<table><thead><tr><th>Título</th><th>Autor</th><th>Código</th><th>Ano</th><th>Status</th></tr></thead><tbody id="bookRows"></tbody></table>
+<table><thead><tr><th>Título</th><th>Autor</th><th>Código</th><th>Status</th><th>Ações</th></tr></thead><tbody id="bookRows"></tbody></table>
 </section>
 
 <section id="students" class="tab">
@@ -80,6 +80,24 @@
 <div id="reportArea" style="margin-top:20px"></div>
 </section>
 </main>
+<div id="editBookModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="editBookTitle">
+  <div class="modalbox">
+    <h2 id="editBookTitle">Editar livro</h2>
+    <div class="form">
+      <input id="editBookName" placeholder="Título">
+      <input id="editBookAuthor" placeholder="Autor">
+      <input id="editBookCode" placeholder="Código">
+      <select id="editBookStatus">
+        <option value="true">Ativo</option>
+        <option value="false">Inativo</option>
+      </select>
+      <div class="modalactions">
+        <button type="button" class="alt" onclick="closeEditBook()">Cancelar</button>
+        <button type="button" onclick="saveEditBook()">Salvar alterações</button>
+      </div>
+    </div>
+  </div>
+</div>
 <script src="arquivo.js"></script>
 </body>
 </html>

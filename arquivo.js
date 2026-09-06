@@ -170,6 +170,54 @@ async function saveEditBook() {
   await save();
 }
 
+async function deleteBook(livroId) {
+  const book = db.livros.find((item) => item.id === livroId);
+  if (!book) return;
+  if (!confirm("Tem certeza que deseja excluir este livro?")) return;
+
+  if (!ONLINE || !currentUser || !sb) {
+    alert(
+      "Não foi possível excluir o livro enquanto o sistema está offline. Nenhuma alteração foi feita.",
+    );
+    return;
+  }
+
+  try {
+    const { data: relatedLoans, error: loansError } = await sb
+      .from("emprestimos")
+      .select("id")
+      .eq("livro", livroId)
+      .limit(1);
+
+    if (loansError) throw loansError;
+    if (relatedLoans.length) {
+      alert(
+        "Não foi possível excluir este livro porque existem empréstimos relacionados a ele.",
+      );
+      return;
+    }
+
+    const { error } = await sb.from("livros").delete().eq("id", livroId);
+    if (error) throw error;
+
+    db.livros = db.livros.filter((livro) => livro.id !== livroId);
+    saveLocal();
+    render();
+    alert("Livro excluído com sucesso.");
+  } catch (error) {
+    console.error("Erro ao excluir livro:", error);
+    const hasRelatedLoans =
+      error.code === "23503" ||
+      String(error.message || "").toLowerCase().includes("emprestimos") ||
+      String(error.message || "").toLowerCase().includes("foreign key");
+    alert(
+      hasRelatedLoans
+        ? "Não foi possível excluir este livro porque existem empréstimos relacionados a ele."
+        : "Não foi possível excluir o livro. Nenhuma alteração foi feita.",
+    );
+  }
+}
+
 async function addStudent() {
   let a = {
     id: uid(),
@@ -353,7 +401,8 @@ function render() {
       (b) => `<tr>
    <td>${esc(b.titulo)}</td><td>${esc(b.autor)}</td><td>${esc(b.codigo)}</td>
    <td><span class="status-badge ${b.ativo === false ? "status-inactive" : "status-active"}">${b.ativo === false ? "Inativo" : "Ativo"}</span></td>
-   <td><button type="button" onclick="editBook('${b.id}')">Editar</button></td></tr>`,
+  <td class="book-actions"><button type="button" onclick="editBook('${b.id}')">✏️ Editar</button>
+  <button type="button" class="delete-button" onclick="deleteBook('${b.id}')">🗑️ Excluir</button></td></tr>`,
     )
     .join("");
 

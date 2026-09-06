@@ -34,6 +34,12 @@ button.alt {
 .danger {
   background: #b91c1c;
 }
+.delete-button {
+  background: #b91c1c;
+}
+.book-actions {
+  white-space: nowrap;
+}
 main {
   padding: 22px;
   max-width: 1200px;

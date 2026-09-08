@@ -15,11 +15,17 @@ const initial = {
 let db = JSON.parse(
   localStorage.getItem("bibliotecaDB") || JSON.stringify(initial),
 );
+db.alunos = db.alunos.map((student) => ({
+  ...student,
+  serie: student.serie ?? student.turma ?? "",
+  curso: student.curso ?? student.matricula ?? "",
+}));
 let sb = ONLINE
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 let currentUser = null;
 let editingBookId = null;
+let editingStudentId = null;
 const today = new Date().toISOString().slice(0, 10);
 
 document.getElementById("today").textContent = new Date().toLocaleDateString(
@@ -222,8 +228,8 @@ async function addStudent() {
   let a = {
     id: uid(),
     nome: stuName.value.trim(),
-    turma: stuClass.value.trim(),
-    matricula: stuReg.value.trim(),
+    serie: stuSeries.value.trim(),
+    curso: stuCourse.value.trim(),
     email: stuEmail.value.trim(),
   };
   if (!a.nome) {
@@ -231,8 +237,89 @@ async function addStudent() {
     return;
   }
   db.alunos.push(a);
-  [stuName, stuClass, stuReg, stuEmail].forEach((x) => (x.value = ""));
+  [stuName, stuSeries, stuCourse, stuEmail].forEach((x) => (x.value = ""));
   await save();
+}
+
+function editStudent(id) {
+  const student = db.alunos.find((item) => item.id === id);
+  if (!student) return;
+  editingStudentId = id;
+  editStudentName.value = student.nome || "";
+  editStudentSeries.value = student.serie || "";
+  editStudentCourse.value = student.curso || "";
+  editStudentEmail.value = student.email || "";
+  editStudentModal.classList.remove("hidden");
+  editStudentName.focus();
+}
+
+function closeEditStudent() {
+  editingStudentId = null;
+  editStudentModal.classList.add("hidden");
+}
+
+async function saveEditStudent() {
+  const student = db.alunos.find((item) => item.id === editingStudentId);
+  if (!student) return;
+  const nome = editStudentName.value.trim();
+  if (!nome) {
+    alert("Informe o nome.");
+    return;
+  }
+  student.nome = nome;
+  student.serie = editStudentSeries.value.trim();
+  student.curso = editStudentCourse.value.trim();
+  student.email = editStudentEmail.value.trim();
+  closeEditStudent();
+  await save();
+}
+
+async function deleteStudent(alunoId) {
+  const student = db.alunos.find((item) => item.id === alunoId);
+  if (!student) return;
+  if (!confirm("Tem certeza que deseja excluir este aluno?")) return;
+
+  if (!ONLINE || !currentUser || !sb) {
+    alert(
+      "Não foi possível excluir o aluno enquanto o sistema está offline. Nenhuma alteração foi feita.",
+    );
+    return;
+  }
+
+  try {
+    const { data: relatedLoans, error: loansError } = await sb
+      .from("emprestimos")
+      .select("id")
+      .eq("aluno", alunoId)
+      .limit(1);
+
+    if (loansError) throw loansError;
+    if (relatedLoans.length) {
+      alert(
+        "Não foi possível excluir este aluno porque existem empréstimos relacionados a ele.",
+      );
+      return;
+    }
+
+    const { error } = await sb.from("alunos").delete().eq("id", alunoId);
+    if (error) throw error;
+
+    db.alunos = db.alunos.filter((item) => item.id !== alunoId);
+    saveLocal();
+    render();
+    alert("Aluno excluído com sucesso.");
+  } catch (error) {
+    console.error("Erro ao excluir aluno:", error);
+    const hasRelatedLoans =
+      error.code === "23503" ||
+      String(error.message || "").toLowerCase().includes("emprestimos") ||
+      String(error.message || "").toLowerCase().includes("foreign key");
+    alert(
+      hasRelatedLoans
+        ? "Não foi possível excluir este aluno porque existem empréstimos relacionados a ele."
+        : "Não foi possível excluir o aluno. Nenhuma alteração foi feita.",
+    );
+  }
 }
 
 async function addLoan() {
@@ -294,8 +381,8 @@ async function loadCloud() {
       alunos: students.data.map((a) => ({
         id: a.id,
         nome: a.nome,
-        turma: a.turma,
-        matricula: a.matricula,
+        serie: a.serie,
+        curso: a.curso,
         email: a.email,
       })),
       emprestimos: loans.data.map((l) => ({
@@ -334,8 +421,8 @@ async function syncLocalToCloud() {
   const a = db.alunos.map((x) => ({
     id: x.id,
     nome: x.nome,
-    turma: x.turma,
-    matricula: x.matricula,
+    serie: x.serie,
+    curso: x.curso,
     email: x.email,
   }));
   const l = db.emprestimos.map((x) => ({
@@ -409,8 +496,9 @@ function render() {
   studentRows.innerHTML = db.alunos
     .map(
       (a) => `<tr>
-   <td>${esc(a.nome)}</td><td>${esc(a.turma)}</td><td>${esc(a.matricula)}</td>
-   <td>${esc(a.email)}</td></tr>`,
+   <td>${esc(a.nome)}</td><td>${esc(a.serie)}</td><td>${esc(a.curso)}</td>
+   <td>${esc(a.email)}</td><td class="book-actions"><button type="button" onclick="editStudent('${a.id}')">✏️ Editar</button>
+   <button type="button" class="delete-button" onclick="deleteStudent('${a.id}')">🗑️ Excluir</button></td></tr>`,
     )
     .join("");
 
@@ -419,7 +507,7 @@ function render() {
     db.alunos
       .map(
         (a) =>
-          `<option value="${a.id}">${esc(a.nome)} — ${esc(a.turma)}</option>`,
+          `<option value="${a.id}">${esc(a.nome)} — ${esc(a.serie)}</option>`,
       )
       .join("");
 
@@ -492,7 +580,7 @@ function exportCSV() {
   let rows = [
     [
       "Aluno",
-      "Turma",
+      "Série",
       "Livro",
       "Data",
       "Prazo",
@@ -505,7 +593,7 @@ function exportCSV() {
       b = db.livros.find((x) => x.id === l.livro) || {};
     rows.push([
       a.nome,
-      a.turma,
+      a.serie,
       b.titulo,
       l.data,
       l.prazo,

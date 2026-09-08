@@ -15,10 +15,12 @@ const initial = {
 let db = JSON.parse(
   localStorage.getItem("bibliotecaDB") || JSON.stringify(initial),
 );
-db.alunos = db.alunos.map((student) => ({
-  ...student,
-  serie: student.serie ?? student.turma ?? "",
-  curso: student.curso ?? student.matricula ?? "",
+db.alunos = db.alunos.map(({ id, nome, serie, curso, email }) => ({
+  id,
+  nome,
+  serie,
+  curso,
+  email,
 }));
 let sb = ONLINE
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -225,20 +227,41 @@ async function deleteBook(livroId) {
 }
 
 async function addStudent() {
-  let a = {
-    id: uid(),
+  const student = {
     nome: stuName.value.trim(),
     serie: stuSeries.value.trim(),
     curso: stuCourse.value.trim(),
     email: stuEmail.value.trim(),
   };
-  if (!a.nome) {
+  if (!student.nome) {
     alert("Informe o nome.");
     return;
   }
-  db.alunos.push(a);
+
+  if (ONLINE && currentUser && sb) {
+    const { data, error } = await sb
+      .from("alunos")
+      .insert(student)
+      .select("id, nome, serie, curso, email, created_at")
+      .single();
+    if (error) {
+      console.error("Erro ao cadastrar aluno:", error);
+      alert("Não foi possível cadastrar o aluno. Nenhuma alteração foi feita.");
+      return;
+    }
+    db.alunos.push({
+      id: data.id,
+      nome: data.nome,
+      serie: data.serie,
+      curso: data.curso,
+      email: data.email,
+    });
+  } else {
+    db.alunos.push({ id: uid(), ...student });
+  }
   [stuName, stuSeries, stuCourse, stuEmail].forEach((x) => (x.value = ""));
-  await save();
+  saveLocal();
+  render();
 }
 
 function editStudent(id) {
@@ -266,12 +289,30 @@ async function saveEditStudent() {
     alert("Informe o nome.");
     return;
   }
-  student.nome = nome;
-  student.serie = editStudentSeries.value.trim();
-  student.curso = editStudentCourse.value.trim();
-  student.email = editStudentEmail.value.trim();
+
+  const updates = {
+    nome,
+    serie: editStudentSeries.value.trim(),
+    curso: editStudentCourse.value.trim(),
+    email: editStudentEmail.value.trim(),
+  };
+
+  if (ONLINE && currentUser && sb) {
+    const { error } = await sb
+      .from("alunos")
+      .update(updates)
+      .eq("id", student.id);
+    if (error) {
+      console.error("Erro ao editar aluno:", error);
+      alert("Não foi possível editar o aluno. Nenhuma alteração foi feita.");
+      return;
+    }
+  }
+
+  Object.assign(student, updates);
   closeEditStudent();
-  await save();
+  saveLocal();
+  render();
 }
 
 async function deleteStudent(alunoId) {
@@ -363,7 +404,10 @@ async function loadCloud() {
   try {
     const [books, students, loans] = await Promise.all([
       sb.from("livros").select("*").order("titulo"),
-      sb.from("alunos").select("*").order("nome"),
+      sb
+        .from("alunos")
+        .select("id, nome, serie, curso, email, created_at")
+        .order("nome"),
       sb.from("emprestimos").select("*").order("data", { ascending: false }),
     ]);
     if (books.error) throw books.error;

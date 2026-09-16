@@ -5,26 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Biblioteca Escolar — Sistema Online</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-body{font-family:Arial,sans-serif;margin:0;background:#f4f6f8;color:#1f2937}
-header{background:#17365d;color:#fff;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}
-nav{background:#fff;padding:10px 20px;display:flex;gap:8px;flex-wrap:wrap;box-shadow:0 1px 4px #bbb}
-button{border:0;border-radius:7px;padding:9px 13px;cursor:pointer;background:#17365d;color:white}
-button.alt{background:#64748b}.danger{background:#b91c1c}
-main{padding:22px;max-width:1200px;margin:auto}.tab{display:none}.tab.active{display:block}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
-.card{background:white;padding:18px;border-radius:10px;box-shadow:0 1px 4px #ddd}.num{font-size:28px;font-weight:bold}
-table{width:100%;border-collapse:collapse;background:white;margin-top:15px}
-th,td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left}
-input,select{padding:9px;border:1px solid #cbd5e1;border-radius:6px;width:100%;box-sizing:border-box}
-.form{background:white;padding:18px;border-radius:10px;display:grid;gap:10px;max-width:700px}
-.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
-.badge{padding:4px 8px;border-radius:12px;background:#dcfce7}.late{background:#fee2e2;color:#991b1b}
-#login{position:fixed;inset:0;background:#17365d;display:flex;align-items:center;justify-content:center}
-.loginbox{background:#fff;padding:28px;border-radius:12px;width:min(360px,90%)}.loginbox h2{margin-top:0}
-.small{font-size:12px;color:#64748b}.hidden{display:none}
-@media print{header,nav,.no-print{display:none!important}main{padding:0}.tab{display:none}.tab.active{display:block}}
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="login">
@@ -69,17 +50,17 @@ input,select{padding:9px;border:1px solid #cbd5e1;border-radius:6px;width:100%;b
 <h2>Cadastro de livros</h2>
 <div class="form"><div class="row">
 <input id="bookTitle" placeholder="Título"><input id="bookAuthor" placeholder="Autor">
-<input id="bookCode" placeholder="Código"><input id="bookYear" placeholder="Ano">
+<input id="bookCode" placeholder="Código">
 </div><button onclick="addBook()">Cadastrar livro</button></div>
-<table><thead><tr><th>Título</th><th>Autor</th><th>Código</th><th>Ano</th><th>Status</th></tr></thead><tbody id="bookRows"></tbody></table>
+<table><thead><tr><th>Título</th><th>Autor</th><th>Código</th><th>Status</th><th>Ações</th></tr></thead><tbody id="bookRows"></tbody></table>
 </section>
 
 <section id="students" class="tab">
 <h2>Cadastro de alunos</h2>
 <div class="form"><div class="row">
-<input id="stuName" placeholder="Nome"><input id="stuClass" placeholder="Turma"><input id="stuReg" placeholder="Matrícula"><input id="stuEmail" placeholder="E-mail">
+<input id="stuName" placeholder="Nome"><input id="stuSeries" placeholder="Série"><input id="stuCourse" placeholder="Curso"><input id="stuEmail" placeholder="E-mail">
 </div><button onclick="addStudent()">Cadastrar aluno</button></div>
-<table><thead><tr><th>Nome</th><th>Turma</th><th>Matrícula</th><th>E-mail</th></tr></thead><tbody id="studentRows"></tbody></table>
+<table><thead><tr><th>Nome</th><th>Série</th><th>Curso</th><th>E-mail</th><th>Ações</th></tr></thead><tbody id="studentRows"></tbody></table>
 </section>
 
 <section id="loans" class="tab">
@@ -99,325 +80,39 @@ input,select{padding:9px;border:1px solid #cbd5e1;border-radius:6px;width:100%;b
 <div id="reportArea" style="margin-top:20px"></div>
 </section>
 </main>
-
-<script>
-/* =========================================================
-   CONFIGURAÇÃO — coloque aqui as credenciais do seu projeto
-   Supabase (Settings > API).
-   ========================================================= */
-const SUPABASE_URL = "https://vkguqpgpbmkczphepjwe.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_oRc6xmlEbcZZRdPyl26_WQ_wG3jxQmO";
-
-const ONLINE = SUPABASE_URL.startsWith("https://") &&
-               !SUPABASE_URL.includes("COLE_AQUI") &&
-               !SUPABASE_ANON_KEY.includes("COLE_AQUI");
-
-const initial = {
-  livros: [],
-  alunos: [],
-  emprestimos: []
-};
-
-let db = JSON.parse(localStorage.getItem('bibliotecaDB') || JSON.stringify(initial));
-let sb = ONLINE ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
-let currentUser = null;
-const today = new Date().toISOString().slice(0,10);
-
-document.getElementById('today').textContent = new Date().toLocaleDateString('pt-BR');
-document.getElementById('loanDate').value = today;
-document.getElementById('loanDue').value = today;
-
-function setConnection(ok, text) {
-  const el = document.getElementById('connection');
-  el.textContent = (ok ? '● Online' : '● Offline') + (text ? ' — ' + text : '');
-}
-
-function saveLocal() {
-  localStorage.setItem('bibliotecaDB', JSON.stringify(db));
-}
-
-async function save() {
-  saveLocal();
-  render();
-  if (ONLINE && currentUser) {
-    try {
-      await syncLocalToCloud();
-      setConnection(true, 'sincronizado');
-    } catch (e) {
-      console.error(e);
-      setConnection(false, 'alterações locais pendentes');
-      alert('A alteração foi salva neste computador, mas não foi sincronizada com o banco online. Verifique a conexão e tente "Sincronizar".');
-    }
-  }
-}
-
-async function login() {
-  const email = document.getElementById('user').value.trim();
-  const password = document.getElementById('pass').value;
-
-  if (!email || !password) {
-    alert('Informe o e-mail e a senha.');
-    return;
-  }
-
-  if (!ONLINE || !sb) {
-    alert('O sistema não está conectado ao Supabase.');
-    return;
-  }
-
-  const { data, error } = await sb.auth.signInWithPassword({
-    email: email,
-    password: password
-  });
-
-  if (error) {
-    alert('Não foi possível entrar: ' + error.message);
-    console.error('Erro de login:', error);
-    return;
-  }
-
-  currentUser = data.user;
-
-  document.getElementById('login').style.display = 'none';
-
-  await loadCloud();
-}
-
-async function logout() {
-  if (ONLINE && sb) await sb.auth.signOut();
-  currentUser = null;
-  document.getElementById('login').style.display='flex';
-}
-
-function tab(id) {
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  render();
-}
-
-function esc(s) {
-  return String(s??'').replace(/[&<>"']/g,m=>({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[m]));
-}
-
-function uid() {
-  return crypto.randomUUID ? crypto.randomUUID() :
-    'id-' + Date.now() + '-' + Math.random().toString(16).slice(2);
-}
-
-async function addBook() {
-  let b={id:uid(),titulo:bookTitle.value.trim(),autor:bookAuthor.value.trim(),
-         codigo:bookCode.value.trim(),ano:bookYear.value.trim(),ativo:true};
-  if(!b.titulo){alert('Informe o título.');return}
-  db.livros.push(b);
-  [bookTitle,bookAuthor,bookCode,bookYear].forEach(x=>x.value='');
-  await save();
-}
-
-async function addStudent() {
-  let a={id:uid(),nome:stuName.value.trim(),turma:stuClass.value.trim(),
-         matricula:stuReg.value.trim(),email:stuEmail.value.trim()};
-  if(!a.nome){alert('Informe o nome.');return}
-  db.alunos.push(a);
-  [stuName,stuClass,stuReg,stuEmail].forEach(x=>x.value='');
-  await save();
-}
-
-async function addLoan() {
-  if(!loanStudent.value||!loanBook.value)
-    return alert('Selecione aluno e livro.');
-  if(db.emprestimos.some(l=>!l.devolvido && l.livro===loanBook.value))
-    return alert('Este livro já está emprestado.');
-  db.emprestimos.push({
-    id:uid(),aluno:loanStudent.value,livro:loanBook.value,
-    data:loanDate.value,prazo:loanDue.value,devolvido:false,dataDevolucao:''
-  });
-  await save();
-}
-
-async function returnLoan(id) {
-  let l=db.emprestimos.find(x=>x.id===id);
-  if(!l) return;
-  l.devolvido=true;
-  l.dataDevolucao=today;
-  await save();
-}
-
-function getStudent(id){return db.alunos.find(x=>x.id===id)?.nome||'—'}
-function getBook(id){return db.livros.find(x=>x.id===id)?.titulo||'—'}
-function late(l){return !l.devolvido && l.prazo<today}
-
-async function loadCloud() {
-  if (!ONLINE || !currentUser) return;
-  setConnection(true, 'carregando');
-  try {
-    const [books, students, loans] = await Promise.all([
-      sb.from('livros').select('*').order('titulo'),
-      sb.from('alunos').select('*').order('nome'),
-      sb.from('emprestimos').select('*').order('data', {ascending:false})
-    ]);
-    if (books.error) throw books.error;
-    if (students.error) throw students.error;
-    if (loans.error) throw loans.error;
-
-    db = {
-      livros: books.data.map(b=>({
-        id:b.id,titulo:b.titulo,autor:b.autor,codigo:b.codigo,ano:b.ano,ativo:b.ativo
-      })),
-      alunos: students.data.map(a=>({
-        id:a.id,nome:a.nome,turma:a.turma,matricula:a.matricula,email:a.email
-      })),
-      emprestimos: loans.data.map(l=>({
-        id:l.id,aluno:l.aluno,livro:l.livro,data:l.data,prazo:l.prazo,
-        devolvido:l.devolvido,dataDevolucao:l.data_devolucao||''
-      }))
-    };
-    saveLocal();
-    setConnection(true, 'sincronizado');
-    render();
-  } catch(e) {
-    console.error(e);
-    setConnection(false, 'erro de conexão');
-    alert('Não foi possível carregar o banco online. O sistema continuará em modo local.');
-  }
-}
-
-async function syncLocalToCloud() {
-  if (!ONLINE || !currentUser) return;
-
-  // Upsert all records. The SQL below enables RLS policies for authenticated users.
-  const b = db.livros.map(x=>({
-    id:x.id,titulo:x.titulo,autor:x.autor,codigo:x.codigo,ano:x.ano,ativo:x.ativo
-  }));
-  const a = db.alunos.map(x=>({
-    id:x.id,nome:x.nome,turma:x.turma,matricula:x.matricula,email:x.email
-  }));
-  const l = db.emprestimos.map(x=>({
-    id:x.id,aluno:x.aluno,livro:x.livro,data:x.data,prazo:x.prazo,
-    devolvido:x.devolvido,data_devolucao:x.dataDevolucao||null
-  }));
-
-  for (const [table, rows] of [['livros',b],['alunos',a],['emprestimos',l]]) {
-    if (rows.length) {
-      const {error} = await sb.from(table).upsert(rows);
-      if (error) throw error;
-    }
-  }
-}
-
-async function syncNow() {
-  if (!ONLINE) {
-    alert('Configure SUPABASE_URL e SUPABASE_ANON_KEY no código para ativar o banco online.');
-    return;
-  }
-  if (!currentUser) {
-    alert('Entre no sistema primeiro.');
-    return;
-  }
-  await syncLocalToCloud();
-  await loadCloud();
-  alert('Banco online sincronizado com sucesso.');
-}
-
-function render(){
- let activeBooks=db.livros.filter(x=>x.ativo!==false);
- let activeLoans=db.emprestimos.filter(x=>!x.devolvido);
- let lateLoans=activeLoans.filter(late);
-
- cBooks.textContent=activeBooks.length;
- cStudents.textContent=db.alunos.length;
- cLoans.textContent=activeLoans.length;
- cLate.textContent=lateLoans.length;
-
- alerts.innerHTML=lateLoans.length
- ? lateLoans.map(l=>`<p class="late">⚠️ ${esc(getStudent(l.aluno))}:
-   <b>${esc(getBook(l.livro))}</b> — prazo
-   ${new Date(l.prazo+'T00:00:00').toLocaleDateString('pt-BR')}</p>`).join('')
- : '<p>Nenhum empréstimo em atraso.</p>';
-
- bookRows.innerHTML=db.livros.map(b=>`<tr>
-   <td>${esc(b.titulo)}</td><td>${esc(b.autor)}</td><td>${esc(b.codigo)}</td>
-   <td>${esc(b.ano)}</td><td>${b.ativo===false?'Inativo':'Ativo'}</td></tr>`).join('');
-
- studentRows.innerHTML=db.alunos.map(a=>`<tr>
-   <td>${esc(a.nome)}</td><td>${esc(a.turma)}</td><td>${esc(a.matricula)}</td>
-   <td>${esc(a.email)}</td></tr>`).join('');
-
- loanStudent.innerHTML='<option value="">Selecione o aluno</option>'+
-   db.alunos.map(a=>`<option value="${a.id}">${esc(a.nome)} — ${esc(a.turma)}</option>`).join('');
-
- loanBook.innerHTML='<option value="">Selecione o livro</option>'+
-   db.livros.filter(b=>b.ativo!==false &&
-   !activeLoans.some(l=>l.livro===b.id))
-   .map(b=>`<option value="${b.id}">${esc(b.titulo)}</option>`).join('');
-
- loanRows.innerHTML=db.emprestimos.slice().reverse().map(l=>`<tr>
-   <td>${esc(getStudent(l.aluno))}</td><td>${esc(getBook(l.livro))}</td>
-   <td>${esc(l.data)}</td><td>${esc(l.prazo)}</td>
-   <td><span class="${late(l)?'late':'badge'}">${
-     l.devolvido?'Devolvido':late(l)?'Em atraso':'Ativo'}</span></td>
-   <td>${l.devolvido?'':`<button onclick="returnLoan('${l.id}')">
-     Registrar devolução</button>`}</td></tr>`).join('');
-
- reportArea.innerHTML='<b>Resumo:</b> '+db.livros.length+
-   ' livros cadastrados, '+db.alunos.length+' alunos e '+
-   db.emprestimos.length+' empréstimos registrados.';
-}
-
-function exportJSON(){
- let a=document.createElement('a');
- a.href=URL.createObjectURL(new Blob([JSON.stringify(db,null,2)],
-   {type:'application/json'}));
- a.download='backup-biblioteca-'+today+'.json';
- a.click();
-}
-
-function importJSON(e){
- let f=e.target.files[0];if(!f)return;
- let r=new FileReader();
- r.onload=async()=>{
-   try{
-     db=JSON.parse(r.result);
-     saveLocal();
-     render();
-     if(ONLINE && currentUser) await syncLocalToCloud();
-     alert('Backup restaurado e sincronizado.');
-   }catch(err){alert('Arquivo JSON inválido.')}
- };
- r.readAsText(f);
-}
-
-function exportCSV(){
- let rows=[['Aluno','Turma','Livro','Data','Prazo','Devolvido','Data de devolução']];
- db.emprestimos.forEach(l=>{
-   let a=db.alunos.find(x=>x.id===l.aluno)||{},
-       b=db.livros.find(x=>x.id===l.livro)||{};
-   rows.push([a.nome,a.turma,b.titulo,l.data,l.prazo,
-              l.devolvido?'Sim':'Não',l.dataDevolucao||'']);
- });
- let csv=rows.map(r=>r.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(';')).join('\n');
- let a=document.createElement('a');
- a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],
-   {type:'text/csv;charset=utf-8'}));
- a.download='relatorio-emprestimos-'+today+'.csv';
- a.click();
-}
-
-function printReport(){
- document.getElementById('reportArea').innerHTML=
-   '<h3>Relatório de empréstimos</h3>'+
-   document.getElementById('loanRows').parentElement.outerHTML;
- window.print();
-}
-
-// Mantém a tela atualizada caso outra máquina altere dados.
-if (ONLINE) {
-  sb.auth.onAuthStateChange((_event, session) => {
-    currentUser = session?.user || null;
-  });
-}
-
-render();
-</script>
-</body></html>
+<div id="editBookModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="editBookTitle">
+  <div class="modalbox">
+    <h2 id="editBookTitle">Editar livro</h2>
+    <div class="form">
+      <input id="editBookName" placeholder="Título">
+      <input id="editBookAuthor" placeholder="Autor">
+      <input id="editBookCode" placeholder="Código">
+      <select id="editBookStatus">
+        <option value="true">Ativo</option>
+        <option value="false">Inativo</option>
+      </select>
+      <div class="modalactions">
+        <button type="button" class="alt" onclick="closeEditBook()">Cancelar</button>
+        <button type="button" onclick="saveEditBook()">Salvar alterações</button>
+      </div>
+    </div>
+  </div>
+</div>
+  <div id="editStudentModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="editStudentTitle">
+    <div class="modalbox">
+      <h2 id="editStudentTitle">Editar aluno</h2>
+      <div class="form">
+        <input id="editStudentName" placeholder="Nome">
+        <input id="editStudentSeries" placeholder="Série">
+        <input id="editStudentCourse" placeholder="Curso">
+        <input id="editStudentEmail" placeholder="E-mail">
+        <div class="modalactions">
+          <button type="button" class="alt" onclick="closeEditStudent()">Cancelar</button>
+          <button type="button" onclick="saveEditStudent()">Salvar alterações</button>
+        </div>
+      </div>
+    </div>
+  </div>
+<script src="arquivo.js"></script>
+</body>
+</html>
